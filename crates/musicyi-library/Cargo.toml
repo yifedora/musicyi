@@ -1,0 +1,15 @@
+[package]
+name = "musicyi-library"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "musicyi 的标签 / 歌词 / 封面读写与下载落盘"
+readme.workspace = true
+
+[dependencies]
+musicyi-core = { path = "../musicyi-core" }
+lofty = "0.25"
+reqwest = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

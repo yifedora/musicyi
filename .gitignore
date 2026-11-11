@@ -1,0 +1,17 @@
+# 用户数据可能从旧版本残留在源码树，绝不入库
+/history.jsonl
+
+/target
+*.log
+.DS_Store
+Thumbs.db
+*.pdb
+/api-server/node_modules
+/api-server/server.pid
+/session.json
+/data
+/cache
+/logs
+# 旧版本 SQLite 遗留，程序已不再使用
+/musicyi.db
+/musicyi.db-*

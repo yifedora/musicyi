@@ -1,0 +1,15 @@
+[package]
+name = "musicyi-player"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "musicyi 的 rodio 播放线程与音频缓存"
+readme.workspace = true
+
+[dependencies]
+musicyi-core = { path = "../musicyi-core" }
+rodio.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+tracing.workspace = true

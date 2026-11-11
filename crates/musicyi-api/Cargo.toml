@@ -1,0 +1,16 @@
+[package]
+name = "musicyi-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "网易云音乐接口客户端与官方音源解析"
+readme.workspace = true
+
+[dependencies]
+musicyi-core = { path = "../musicyi-core" }
+serde.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+tracing.workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "musicyi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "musicyi —— 终端里的多来源音乐播放器"
+readme.workspace = true
+
+[[bin]]
+name = "musicyi"
+path = "src/main.rs"
+
+[dependencies]
+musicyi-core = { path = "../musicyi-core" }
+musicyi-tui = { path = "../musicyi-tui" }
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+anyhow.workspace = true

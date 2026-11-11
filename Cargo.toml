@@ -1,0 +1,37 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/musicyi",
+    "crates/musicyi-core",
+    "crates/musicyi-api",
+    "crates/musicyi-player",
+    "crates/musicyi-library",
+    "crates/musicyi-tui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+rust-version = "1.88"
+description = "终端里的多来源音乐播放器"
+readme = "README.md"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "signal"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream", "gzip", "query", "charset", "http2"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+ratatui = { version = "0.30", features = ["crossterm"] }
+rodio = { version = "0.23", default-features = false, features = ["playback", "symphonia-all", "tracing"] }
+dirs = "6"
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+unicode-width = "0.2"
+rand = "0.10"

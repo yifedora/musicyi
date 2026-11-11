@@ -1,0 +1,27 @@
+[package]
+name = "musicyi-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "musicyi 的 ratatui 界面、事件循环与 MPRIS"
+readme.workspace = true
+
+[dependencies]
+musicyi-core = { path = "../musicyi-core" }
+musicyi-api = { path = "../musicyi-api" }
+musicyi-player = { path = "../musicyi-player" }
+musicyi-library = { path = "../musicyi-library" }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+ratatui.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rand.workspace = true
+tracing.workspace = true
+unicode-width.workspace = true
+
+# MPRIS 依赖 D-Bus，仅在 Linux 桌面启用；其他平台保留空实现。
+[target.'cfg(target_os = "linux")'.dependencies]
+mpris-server = "0.11"

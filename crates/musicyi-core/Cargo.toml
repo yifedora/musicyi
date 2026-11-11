@@ -1,0 +1,18 @@
+[package]
+name = "musicyi-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "musicyi 核心：模型、配置、路径、歌词解析"
+readme.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+dirs.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+unicode-width.workspace = true

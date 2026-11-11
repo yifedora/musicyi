@@ -16,6 +16,8 @@ license = "GPL-3.0-or-later"
 rust-version = "1.88"
 description = "终端里的多来源音乐播放器"
 readme = "README.md"
+repository = "https://github.com/yifedora/musicyi"
+homepage = "https://github.com/yifedora/musicyi"
 
 [workspace.dependencies]
 anyhow = "1"

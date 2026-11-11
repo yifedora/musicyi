@@ -6,6 +6,8 @@ license.workspace = true
 rust-version.workspace = true
 description = "musicyi —— 终端里的多来源音乐播放器"
 readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [[bin]]
 name = "musicyi"

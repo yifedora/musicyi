@@ -6,6 +6,8 @@ license.workspace = true
 rust-version.workspace = true
 description = "musicyi 的 ratatui 界面、事件循环与 MPRIS"
 readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 musicyi-core = { path = "../musicyi-core" }

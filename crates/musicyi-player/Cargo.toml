@@ -6,6 +6,8 @@ license.workspace = true
 rust-version.workspace = true
 description = "musicyi 的 rodio 播放线程与音频缓存"
 readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 musicyi-core = { path = "../musicyi-core" }

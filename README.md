@@ -10,9 +10,9 @@
 
 ![musicyi 首页](docs/screenshot.png)
 
-| 雀乐推荐列表 | 播放中 |
+| 歌词纯享 | 雀乐推荐列表 |
 | --- | --- |
-| ![雀乐推荐列表](docs/screenshot-indie.png) | ![雀乐推荐播放中（进度 00:46）](docs/screenshot-indie-playing.png) |
+| ![歌词纯享](docs/screenshot-lyrics.png) | ![雀乐推荐列表](docs/screenshot-indie.png) |
 
 - 界面：ratatui 0.30 / crossterm
 - 网络：tokio + reqwest（rustls）

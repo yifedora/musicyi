@@ -1,8 +1,14 @@
 # musicyi
 
+[![CI](https://github.com/yifedora/musicyi/actions/workflows/ci.yml/badge.svg)](https://github.com/yifedora/musicyi/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/yifedora/musicyi)](https://github.com/yifedora/musicyi/releases)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
+
 终端里的多来源音乐播放器。启动后是一个**单一首页列表**，按顺序汇总网易原创、
 街声推荐、雀乐推荐、本地列表与最近播放；选中后进入该栏目的内容列表，`Esc` 逐级
 返回首页，并停在上次选中的位置。
+
+![musicyi 界面](docs/screenshot.png)
 
 - 界面：ratatui 0.30 / crossterm
 - 网络：tokio + reqwest（rustls）
@@ -310,24 +316,10 @@ D-Bus 名称为 `org.mpris.MediaPlayer2.musicyi`。没有 D-Bus session 时 MPRI
   播放地址、封面、歌词都直接使用 `cdn2.indie.cn` 的链接。歌词 URL 返回无时间轴
   纯文本时会自动按纯文本显示。
 - 街声：抓取推荐前 30 首（推荐页每页 20 首，自动翻页去重），单曲详情补时长、
-  专辑、封面与歌词；播放时调用本机 `POST /api/v5/song/{id}/hls/file/` 取得
-  HLS 地址，再由 `ffmpeg` 无损转封装为 MP3 缓存。歌词为纯文本时同样按纯文本显示。
+  专辑、封面与歌词；播放时由本机 API 把 HLS 无损转封装为 MP3 缓存。歌词为纯文本时
+  同样按纯文本显示。
 
-对应本机路由（仍挂在 3000 端口，不额外启动服务）：
-
-```text
-GET  /musicyi/catalog/indie
-GET  /musicyi/catalog/streetvoice/realtime
-GET  /musicyi/catalog/streetvoice/recommend
-GET  /musicyi/catalog/streetvoice/:id
-GET  /musicyi/stream/streetvoice/:id
-```
-
-### 后端为什么保留 Node
-
-网易接口的 weapi/eapi 加密、匿名 token、登录态与风控都在持续变化。用 Rust 重写
-全部接口成本高、维护风险大；当前保留本机 Node API 作为唯一后端，客户端只做重试、
-分页与缓存。需要播放时先运行 `./api-server/start.sh`。
+> 本机 API 的路由表与实现细节见 [DEVELOPMENT.md](DEVELOPMENT.md#api-server)。
 
 ## 常见问题
 
@@ -413,31 +405,26 @@ rm -rf ~/.cache/musicyi/audio \
 
 下载与转换后的音乐文件不会被删除。
 
-## 目录结构
+## 版权说明
 
-```
-musicyi/
-├── Cargo.toml                 # workspace
-├── LICENSE                    # GPL-3.0
-├── .github/workflows/ci.yml   # fmt / check / test / clippy
-├── install.sh                 # 构建并安装到 ~/.local/bin
-├── api-server/                # Node 网易云 API + 雀乐/街声目录
-│   ├── index.js               # 启动 API 并挂载 musicyi 路由
-│   ├── indie.js               # 雀乐最新 10 期
-│   └── streetvoice.js         # 街声推荐与 HLS → MP3
-└── crates/
-    ├── musicyi/               # 可执行入口（CLI / 日志 / runtime）
-    ├── musicyi-core/          # 模型、配置、路径、LRC / 纯文本解析
-    ├── musicyi-api/           # 网易云接口、来源 DTO、官方音源解析
-    ├── musicyi-player/        # rodio 播放线程、音频缓存
-    ├── musicyi-library/       # lofty 标签 / 歌词 / 封面读写、下载落盘
-    └── musicyi-tui/           # 单一首页 ratatui 界面、事件循环、MPRIS
-```
+- 本软件是播放器，不拥有、不存储、不分发任何音乐作品。所有歌曲、封面、歌词、
+  专辑信息的版权归原权利人（词曲作者、音乐人及各音源平台，如网易云音乐、
+  街声、雀乐等）所有。
+- **仅限互联网试听**：通过音源平台获取的音频仅用于个人试听。部分歌曲（如网易云）
+  只能拿到官方 30 秒试听片段，即为正常现象。
+- **24 小时内删除**：试听产生的缓存文件（`~/.cache/musicyi/audio/`）及通过 `d`
+  下载到本地的文件，均须在 **24 小时内删除**；禁止以任何形式传播、上传、
+  出售或用于商业用途。
+- 如需完整收听，请通过正版渠道购买或订阅（网易云音乐 VIP、雀乐 / 街声会员等）。
+- 本项目与各音源平台无任何隶属或背书关系；因使用本软件产生的版权纠纷由使用者自行承担。
+- 若权利人认为本项目侵犯其权益，请通过 GitHub Issues 联系，我们会及时处理。
 
 ## 许可
 
-GPL-3.0-or-later，见 [LICENSE](LICENSE)。
+版权所有 © 2026 yifedora。本软件以 GPL-3.0-or-later 发布，见 [LICENSE](LICENSE)。
 
 接口能力来自开源项目 [netease-cloud-music-api-alger](https://github.com/algerkong/netease-cloud-music-api)，
 交互灵感来自 [go-musicfox](https://github.com/go-musicfox/go-musicfox) 与
 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer)。
+
+开发者文档（架构 / 目录结构 / api-server / CI / 发布流程）见 [DEVELOPMENT.md](DEVELOPMENT.md)。

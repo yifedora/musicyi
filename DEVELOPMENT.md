@@ -34,7 +34,9 @@ musicyi/
 ├── README.md                  # 用户向文档
 ├── DEVELOPMENT.md             # 本文件
 ├── docs/
-│   └── screenshot.png         # README 截图（由 tmux 真实抓帧渲染生成）
+│   ├── screenshot.png         # README 首页截图
+│   ├── screenshot-indie.png   # README 雀乐推荐列表截图
+│   └── screenshot-indie-playing.png  # README 雀乐推荐播放中截图
 ├── .github/workflows/ci.yml   # CI：fmt / check / test / clippy + windows cargo check
 ├── install.sh                 # 构建 release 并安装到 ~/.local/bin（--uninstall 只删二进制）
 ├── api-server/                # Node 网易云 API + 雀乐 / 街声目录（npm，node_modules 不入库）

@@ -8,7 +8,11 @@
 街声推荐、雀乐推荐、本地列表与最近播放；选中后进入该栏目的内容列表，`Esc` 逐级
 返回首页，并停在上次选中的位置。
 
-![musicyi 界面](docs/screenshot.png)
+![musicyi 首页](docs/screenshot.png)
+
+| 雀乐推荐列表 | 播放中 |
+| --- | --- |
+| ![雀乐推荐列表](docs/screenshot-indie.png) | ![雀乐推荐播放中（进度 00:46）](docs/screenshot-indie-playing.png) |
 
 - 界面：ratatui 0.30 / crossterm
 - 网络：tokio + reqwest（rustls）

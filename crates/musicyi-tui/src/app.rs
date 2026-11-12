@@ -1,7 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
+
+use ferrous_opencc::OpenCC;
+use ferrous_opencc::config::BuiltinConfig;
 
 use musicyi_api::{ApiClient, IndiePlaylist, RawLyric, Resolver};
 use musicyi_core::config::Config;
@@ -17,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use crate::event::{Event, LocalScan, TagUpdate};
+use crate::fallback;
 use crate::history;
 use crate::input::{self, Classified};
 use crate::m3u;
@@ -1630,13 +1634,24 @@ impl App {
         let api = self.api.clone();
         let http = self.http.clone();
         let tx = self.tx.clone();
+        let log_dir = self.paths.log_dir.clone();
+        let web = match fallback::external_client() {
+            Ok(client) => client,
+            Err(e) => {
+                self.tagging = false;
+                self.tag_progress = None;
+                self.toast(&e);
+                return;
+            }
+        };
         tokio::spawn(async move {
             let old_id = song.id.clone();
             let (hint_artist, hint_title) = musicyi_library::filename_hint(&origin);
             let title = hint_title
                 .clone()
                 .filter(|s| !s.trim().is_empty())
-                .unwrap_or_else(|| song.name.clone());
+                .map(|t| musicyi_library::clean_match_title(&t))
+                .unwrap_or_else(|| musicyi_library::clean_match_title(&song.name));
             let artist = hint_artist
                 .clone()
                 .or_else(|| song.artists.first().cloned())
@@ -1647,48 +1662,30 @@ impl App {
                 format!("{title} {}", artist.trim())
             };
 
-            let updated = match api.search_songs(&query, 15, 0).await {
-                Ok(candidates) => {
-                    match pick_best_match(
-                        &song,
-                        hint_artist.as_deref(),
-                        hint_title.as_deref(),
-                        &candidates,
-                    ) {
-                        Some(matched) => {
-                            match convert_and_tag(
-                                &api,
-                                &http,
-                                &song,
-                                &matched,
-                                &source_dir,
-                                &output_dir,
-                            )
-                            .await
-                            {
-                                Ok(update) => Some(update),
-                                Err(e) => {
-                                    let _ = tx.send(Event::TagResult {
-                                        seq,
-                                        old_id,
-                                        updated: None,
-                                        message: e,
-                                    });
-                                    return;
-                                }
-                            }
-                        }
-                        None => None,
-                    }
-                }
+            let hint_title_clean = hint_title
+                .as_deref()
+                .map(musicyi_library::clean_match_title);
+            let updated = match resolve_and_convert(
+                ConvertClients {
+                    api: &api,
+                    http: &http,
+                    web: &web,
+                },
+                &song,
+                hint_artist.as_deref(),
+                hint_title_clean.as_deref(),
+                &query,
+                ConvertCtx {
+                    source_dir: &source_dir,
+                    output_dir: &output_dir,
+                },
+            )
+            .await
+            {
+                Ok(update) => Some(update),
                 Err(e) => {
-                    let _ = tx.send(Event::TagResult {
-                        seq,
-                        old_id,
-                        updated: None,
-                        message: format!("搜索失败：{e}"),
-                    });
-                    return;
+                    fallback::log_failure(&log_dir, &origin, &query, &e);
+                    None
                 }
             };
 
@@ -1748,6 +1745,16 @@ impl App {
         let api = self.api.clone();
         let http = self.http.clone();
         let tx = self.tx.clone();
+        let log_dir = self.paths.log_dir.clone();
+        let web = match fallback::external_client() {
+            Ok(client) => client,
+            Err(e) => {
+                self.tagging = false;
+                self.tag_progress = None;
+                self.toast(&e);
+                return;
+            }
+        };
         let delay = self.cfg.local.tag_delay_ms.min(2000);
         tokio::spawn(async move {
             let mut fixed = 0u64;
@@ -1759,7 +1766,8 @@ impl App {
                 let title = hint_title
                     .clone()
                     .filter(|s| !s.trim().is_empty())
-                    .unwrap_or_else(|| song.name.clone());
+                    .map(|t| musicyi_library::clean_match_title(&t))
+                    .unwrap_or_else(|| musicyi_library::clean_match_title(&song.name));
                 let artist = hint_artist
                     .clone()
                     .or_else(|| song.artists.first().cloned())
@@ -1771,31 +1779,34 @@ impl App {
                 };
 
                 let mut wrote = false;
-                match api.search_songs(&query, 15, 0).await {
-                    Ok(candidates) => {
+                let hint_title_clean = hint_title
+                    .as_deref()
+                    .map(musicyi_library::clean_match_title);
+                match resolve_and_convert(
+                    ConvertClients {
+                        api: &api,
+                        http: &http,
+                        web: &web,
+                    },
+                    song,
+                    hint_artist.as_deref(),
+                    hint_title_clean.as_deref(),
+                    &query,
+                    ConvertCtx {
+                        source_dir: &source_dir,
+                        output_dir: &output_dir,
+                    },
+                )
+                .await
+                {
+                    Ok(_) => {
                         consecutive = 0;
-                        if let Some(matched) = pick_best_match(
-                            song,
-                            hint_artist.as_deref(),
-                            hint_title.as_deref(),
-                            &candidates,
-                        ) && convert_and_tag(
-                            &api,
-                            &http,
-                            song,
-                            &matched,
-                            &source_dir,
-                            &output_dir,
-                        )
-                        .await
-                        .is_ok()
-                        {
-                            fixed += 1;
-                            wrote = true;
-                        }
+                        fixed += 1;
+                        wrote = true;
                     }
-                    Err(_) => {
+                    Err(e) => {
                         consecutive += 1;
+                        fallback::log_failure(&log_dir, &origin, &query, &e);
                     }
                 }
                 if !wrote {
@@ -2912,30 +2923,17 @@ async fn convert_and_tag(
     source_dir: &Path,
     output_dir: &Path,
 ) -> std::result::Result<TagUpdate, String> {
-    if same_dir(source_dir, output_dir) {
-        return Err("转换目录不能与源目录相同，请修改配置 [local] output_dir".into());
-    }
-    let origin = local_origin(local);
-    if !origin.exists() {
-        return Err(format!("原始文件不存在：{}", origin.display()));
-    }
-    if origin.starts_with(output_dir) {
-        return Err("该文件已经在转换目录里".into());
-    }
-    let relative = origin.strip_prefix(source_dir).map_or_else(
-        |_| {
-            origin
-                .file_name()
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("unknown"))
-        },
-        Path::to_path_buf,
-    );
-    let dest = output_dir.join(relative);
-
     let lyric = match api.lyric(&matched.id).await {
         Ok(raw) if !raw.lrc.trim().is_empty() => Some(raw.lrc),
-        _ => None,
+        _ => {
+            fallback::lrclib_lyrics(
+                http,
+                &matched.name,
+                &matched.artist_text(),
+                matched.duration_ms,
+            )
+            .await
+        }
     };
     let cover = match matched
         .cover_url
@@ -2959,9 +2957,159 @@ async fn convert_and_tag(
         None => None,
     };
 
-    let title = matched.name.clone();
-    let artists = matched.artists.clone();
-    let album = matched.album.clone();
+    write_converted(
+        local,
+        ConvertCtx {
+            source_dir,
+            output_dir,
+        },
+        &matched.name,
+        &matched.artists,
+        &matched.album,
+        lyric,
+        cover,
+    )
+    .await
+}
+
+/// 外部回退准备：元数据走 MusicBrainz + Cover Art Archive，歌词走 LRCLIB。
+/// 返回写文件所需的全部零件，由公共核心落盘。
+pub struct FallbackParts {
+    pub title: String,
+    pub artists: Vec<String>,
+    pub album: String,
+    pub lyric: Option<String>,
+    pub cover: Option<Vec<u8>>,
+}
+
+async fn prepare_fallback(
+    http: &reqwest::Client,
+    local: &Song,
+    hint_artist: Option<&str>,
+    hint_title: Option<&str>,
+) -> std::result::Result<FallbackParts, String> {
+    let origin = local_origin(local);
+    let (file_artist, file_title) = musicyi_library::filename_hint(&origin);
+    let title = hint_title
+        .map(str::to_string)
+        .or(file_title)
+        .map(|s| musicyi_library::clean_match_title(s.trim()))
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| musicyi_library::clean_match_title(&local.name));
+    let artist = hint_artist
+        .map(str::to_string)
+        .or(file_artist)
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+
+    let meta = fallback::musicbrainz_meta(http, &title, &artist, local.duration_ms)
+        .await
+        .ok_or_else(|| format!("外部库也没找到匹配（{title} {artist}）"))?;
+    let lyric = fallback::lrclib_lyrics(http, &title, &artist, local.duration_ms).await;
+    Ok(FallbackParts {
+        title: meta.title,
+        artists: meta.artists,
+        album: meta.album,
+        lyric,
+        cover: meta.cover,
+    })
+}
+
+/// 转换用的路径对。
+#[derive(Clone, Copy)]
+struct ConvertCtx<'a> {
+    source_dir: &'a Path,
+    output_dir: &'a Path,
+}
+
+/// 补全流程用到的三个客户端：网易云 API、网易云专用 HTTP、外部库（直连、无代理）。
+struct ConvertClients<'a> {
+    api: &'a ApiClient,
+    http: &'a reqwest::Client,
+    web: &'a reqwest::Client,
+}
+
+/// 单首 / 批量共用的补全流程：网易云搜索 → pick_best_match → convert_and_tag；
+/// 未命中或转换失败时走 MusicBrainz/LRCLIB 外部回退。
+/// 全部失败只返回 Err(原因)，由调用方决定 log_failure 与计数。
+async fn resolve_and_convert(
+    client: ConvertClients<'_>,
+    song: &Song,
+    hint_artist: Option<&str>,
+    hint_title: Option<&str>,
+    query: &str,
+    ctx: ConvertCtx<'_>,
+) -> std::result::Result<TagUpdate, String> {
+    let ConvertClients { api, http, web } = client;
+    let netease_err = match api.search_songs(query, 15, 0).await {
+        Ok(candidates) => match pick_best_match(song, hint_artist, hint_title, &candidates) {
+            Some(matched) => {
+                match convert_and_tag(api, http, song, &matched, ctx.source_dir, ctx.output_dir)
+                    .await
+                {
+                    Ok(update) => return Ok(update),
+                    Err(e) => format!("网易云转换失败：{e}"),
+                }
+            }
+            None => "网易云未找到匹配".to_string(),
+        },
+        Err(e) => format!("网易云搜索失败：{e}"),
+    };
+    match prepare_fallback(web, song, hint_artist, hint_title).await {
+        Ok(parts) => write_converted(
+            song,
+            ctx,
+            &parts.title,
+            &parts.artists,
+            &parts.album,
+            parts.lyric,
+            parts.cover,
+        )
+        .await
+        .map_err(|e| format!("{netease_err}；外部库转换失败：{e}")),
+        Err(e) => Err(format!("{netease_err}；外部库：{e}")),
+    }
+}
+
+/// 公共核心：复制原始文件、写标签 / 歌词 / 封面、原子改名，
+/// 返回界面用的 [`TagUpdate`]。网易云和外部回退都走这里。
+async fn write_converted(
+    local: &Song,
+    ctx: ConvertCtx<'_>,
+    title: &str,
+    artists: &[String],
+    album: &str,
+    lyric: Option<String>,
+    cover: Option<Vec<u8>>,
+) -> std::result::Result<TagUpdate, String> {
+    let ConvertCtx {
+        source_dir,
+        output_dir,
+    } = ctx;
+    if same_dir(source_dir, output_dir) {
+        return Err("转换目录不能与源目录相同，请修改配置 [local] output_dir".into());
+    }
+    let origin = local_origin(local);
+    if !origin.exists() {
+        return Err(format!("原始文件不存在：{}", origin.display()));
+    }
+    if origin.starts_with(output_dir) {
+        return Err("该文件已经在转换目录里".into());
+    }
+    let relative = origin.strip_prefix(source_dir).map_or_else(
+        |_| {
+            origin
+                .file_name()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("unknown"))
+        },
+        Path::to_path_buf,
+    );
+    let dest = output_dir.join(relative);
+
+    let title = title.to_string();
+    let artists = artists.to_vec();
+    let album = album.to_string();
     let dest_label = dest.to_string_lossy().into_owned();
     let origin_label = origin.to_string_lossy().into_owned();
     let dest_io = dest.clone();
@@ -3204,8 +3352,19 @@ fn collect_audio_files(dir: &Path, output_dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// OpenCC 繁→简实例，进程内只建一次。字典内嵌在二进制里，不碰文件系统。
+static OPENCC_T2S: LazyLock<Option<OpenCC>> =
+    LazyLock::new(|| OpenCC::from_config(BuiltinConfig::T2s).ok());
+
+/// 统一的比较键：繁→简 + 小写 + 只留字母数字。
+/// 繁体文件名和简体接口都归一到同一条路径上再比对。
 fn normalize(text: &str) -> String {
-    text.chars()
+    let simplified = OPENCC_T2S
+        .as_ref()
+        .map(|cc| cc.convert(text))
+        .unwrap_or(text.to_string());
+    simplified
+        .chars()
         .flat_map(|c| c.to_lowercase())
         .filter(|c| c.is_alphanumeric())
         .collect()
@@ -3347,6 +3506,23 @@ mod tests {
         let local = song("Ground Zero", "April Rain", 372_000);
         let candidates = vec![song("完全无关", "别的歌手", 100_000)];
         assert!(pick_best_match(&local, None, None, &candidates).is_none());
+    }
+
+    #[test]
+    fn normalize_unifies_traditional_and_simplified() {
+        assert_eq!(normalize("世說心語"), normalize("世说心语"));
+        assert_eq!(normalize("歷歷萬鄉"), normalize("历历万乡"));
+        // 生僻异体（U+8914 褔）OpenCC 字典不收，但网易云官方曲名也写此形，两边一致可直接匹配
+        assert_eq!(normalize("大風吹"), normalize("大风吹"));
+    }
+
+    #[test]
+    fn best_match_matches_traditional_file_name() {
+        let local = song("世說心語", "Sun Yanzi", 222_000);
+        let candidates = vec![song("世说心语", "孙燕姿", 222_106)];
+        let matched = pick_best_match(&local, Some("Sun Yanzi"), Some("世說心語"), &candidates);
+        // 艺术家对不上（Sun Yanzi vs 孙燕姿）也至少应凭标题+时长命中
+        assert!(matched.is_some());
     }
 
     #[test]

@@ -5,6 +5,6 @@ pub mod tags;
 
 pub use download::{DownloadOutcome, download_to, sanitize};
 pub use tags::{
-    EmbeddedMeta, filename_hint, read_cover, read_lyrics, read_meta, tag_needs_fix, write_meta,
-    write_meta_full,
+    EmbeddedMeta, clean_match_title, filename_hint, read_cover, read_lyrics, read_meta,
+    tag_needs_fix, write_meta, write_meta_full,
 };

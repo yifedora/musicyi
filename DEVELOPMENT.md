@@ -52,7 +52,9 @@ musicyi/
     ├── musicyi-api/           # 网易云接口、来源 DTO、官方音源解析
     ├── musicyi-player/        # rodio 播放线程、音频缓存
     ├── musicyi-library/       # lofty 标签 / 歌词 / 封面读写、下载落盘
-    └── musicyi-tui/           # 单一首页 ratatui 界面、事件循环、MPRIS
+    └── musicyi-tui/           # 单一首页 ratatui 界面、事件循环、MPRIS、外部标签回退
+        └── src/fallback.rs    # 网易云未命中时：MusicBrainz（元数据/CAA 封面）+ LRCLIB（歌词）回退；
+                               # tag-failures.log 落盘（log_dir 下 TSV：时间/文件/query/原因）
 ```
 
 ## api-server
@@ -147,6 +149,19 @@ crate 元数据统一在 workspace 声明（`description` / `readme` / `reposito
 `license` / `rust-version`），各 crate 以 `*.workspace = true` 继承；
 仅 `description` 各自不同。
 
+## 本地标签补全（t / T）
+
+流程在 `crates/musicyi-tui/src/app.rs`：`resolve_and_convert()` 先走网易云
+`cloudsearch`，`pick_best_match()` 按标题 / 歌手 / 时长（容差 10s）取最高分；繁体
+曲名先经 `ferrous-opencc`（`T2s`，内置于二进制，无系统依赖）归一到简体再参加匹配。
+未命中或转换失败时，`prepare_fallback()` 改查 MusicBrainz（CC0；title/artist 归一
+包含匹配 + 时长校验；封面走 Cover Art Archive `front-500`），歌词走
+`lrclib_lyrics()`（`/api/search`，`syncedLyrics` 优先，其次 `plainLyrics`；
+LRCLIB 中文覆盖抽样较差，会返回空）。全部失败追加写
+`<日志目录>/tag-failures.log`（TSV）。注意：MusicBrainz 官方限速 1 req/s，当前
+实现未做限速（批量请求可能触发节流）；LRCLIB 无 key 无限速。两条请求路径都带独立
+超时且不会 panic。
+
 ## 已知问题 / 技术债
 
 - `crates/musicyi-tui/src/app.rs` 约 3400 行，80 个方法的 god object：`render()`（~250 行）、
@@ -159,7 +174,8 @@ crate 元数据统一在 workspace 声明（`description` / `readme` / `reposito
 
 - 全仓库 GPL-3.0-or-later；[LICENSE](LICENSE) 为官方 GPL-3.0 正文。
 - 主要依赖：ratatui / crossterm（TUI）、tokio + reqwest（rustls）、rodio + symphonia（音频解码，
-  纯 Rust）、lofty（标签）、dirs、clap、rand、tracing、mpris-server（仅 Linux）；
+  纯 Rust）、lofty（标签）、dirs、clap、rand、tracing、mpris-server（仅 Linux）、
+  ferrous-opencc（繁→简，内嵌字典，不依赖系统 OpenCC）；
   运行时另需 Node 18+ 的 `netease-cloud-music-api-alger`（MIT）与 `ffmpeg`（街声 HLS 转封装）。
 - 交互灵感来自 [go-musicfox](https://github.com/go-musicfox/go-musicfox) 与
   [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer)（鸣谢，未衍生代码）。

@@ -23,6 +23,8 @@ serde_json.workspace = true
 rand.workspace = true
 tracing.workspace = true
 unicode-width.workspace = true
+chrono.workspace = true
+ferrous-opencc = { version = "0.4.0", features = ["full"] }
 
 # MPRIS 依赖 D-Bus，仅在 Linux 桌面启用；其他平台保留空实现。
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -231,9 +231,75 @@ fn split_artists(raw: &str) -> Vec<String> {
     out
 }
 
+/// 标题里的英文副标题 / 括号注释：搜网易云时这些会把结果直接带偏。
+/// 例：`透明 - Selfless` → `透明`；`In Coma (feat. Jake Howsan Lowe)` → `In Coma`。
+pub fn clean_match_title(title: &str) -> String {
+    let mut cleaned = title.to_string();
+    for pair in [("(", ")"), ("（", "）")] {
+        while let Some(start) = cleaned.find(pair.0) {
+            let rest = start + pair.0.len();
+            let Some(end) = cleaned[rest..].find(pair.1) else {
+                break;
+            };
+            let inside = cleaned[rest..rest + end].to_string();
+            let drop_parens = inside
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || " ._-&'/+".contains(c));
+            let left = cleaned[..start].trim_end().to_string();
+            let right = cleaned[rest + end + pair.1.len()..]
+                .trim_start()
+                .to_string();
+            cleaned = if drop_parens {
+                format!("{left} {right}").trim().to_string()
+            } else {
+                format!("{left} {inside} {right}").trim().to_string()
+            };
+        }
+    }
+    // `中文名 - 英文脚注` 只保留中文部分；纯英文标题不动
+    if let Some((head, _tail)) = cleaned.split_once(" - ") {
+        let head_trim = head.trim();
+        let head_has_cjk = head_trim
+            .chars()
+            .any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c));
+        if head_has_cjk {
+            cleaned = head_trim.to_string();
+        }
+    }
+    cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{EmbeddedMeta, filename_hint, tag_needs_fix_from, text_matches};
+    use super::{EmbeddedMeta, clean_match_title, filename_hint, tag_needs_fix_from, text_matches};
+
+    #[test]
+    fn clean_match_title_strips_english_subtitle_and_parens() {
+        assert_eq!(clean_match_title("透明 - Selfless"), "透明");
+        assert_eq!(clean_match_title("比较幸褔 - Happier"), "比较幸褔");
+        assert_eq!(
+            clean_match_title("In Coma (feat. Jake Howsan Lowe)"),
+            "In Coma"
+        );
+        assert_eq!(
+            clean_match_title("Pure Luck (feat. Freya Staer)"),
+            "Pure Luck"
+        );
+        assert_eq!(
+            clean_match_title("Rises the moon (cover Liana Flores)"),
+            "Rises the moon"
+        );
+        // 括号里是中文时保留括号内容
+        assert_eq!(
+            clean_match_title("The Adults Are Talking"),
+            "The Adults Are Talking"
+        );
+        assert_eq!(clean_match_title("枯葉 - Autumn Leaves"), "枯葉");
+        assert_eq!(
+            clean_match_title("The Faith 最终信仰"),
+            "The Faith 最终信仰"
+        );
+    }
     use std::path::Path;
 
     fn meta(title: &str, artists: &[&str], album: &str) -> EmbeddedMeta {

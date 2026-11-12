@@ -1,5 +1,6 @@
 pub mod app;
 pub mod event;
+mod fallback;
 pub mod history;
 pub mod input;
 pub mod m3u;

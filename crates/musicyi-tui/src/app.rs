@@ -2104,6 +2104,13 @@ impl App {
                         current.name = update.title;
                         current.artists = update.artists;
                         current.album = update.album;
+                        let current = current.clone();
+                        // 正在播放的原文件刚刚被补全写入正文，歌词/封面只存在于
+                        // 新生成的转换副本里，立即重读，歌词面板即时出现歌词。
+                        self.load_lyrics(&current);
+                        let old_key = format!("本地:{old_id}");
+                        self.cover_cache.remove(&old_key);
+                        self.load_cover(&current);
                     }
                     self.toast(message);
                     // 标签写入正文后立刻重扫本地，补全结果即时显示。

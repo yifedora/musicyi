@@ -98,8 +98,6 @@ pub struct App {
     list_state: TableState,
     /// 每个列表最后停留的位置，切换视图 / 返回时恢复。
     selection_memory: HashMap<ListKey, usize>,
-    /// 自动切歌时把指针移到当前歌曲；手动移动列表后暂停。
-    follow_current: bool,
     error: Option<String>,
 
     // 全局单曲搜索
@@ -269,7 +267,6 @@ impl App {
             focus: Focus::List,
             list_state,
             selection_memory: HashMap::new(),
-            follow_current: true,
             error: None,
             search: None,
             search_seq: 0,
@@ -320,7 +317,7 @@ impl App {
             cache_progress: None,
             lyrics: Lyrics::default(),
             lyrics_key: None,
-            show_lyrics: true,
+            show_lyrics: false,
             lyrics_immersive: false,
             lyrics_scroll: 0,
             cover: None,
@@ -485,8 +482,6 @@ impl App {
         if len == 0 {
             return;
         }
-        // 用户主动移动列表时暂停跟随，避免自动切歌抢走指针。
-        self.follow_current = false;
         let current = self.list_state.selected().unwrap_or(0) as i64;
         let next = (current + delta).clamp(0, len as i64 - 1) as usize;
         self.list_state.select(Some(next));
@@ -497,7 +492,6 @@ impl App {
         if len == 0 {
             return;
         }
-        self.follow_current = false;
         self.list_state.select(Some(if last { len - 1 } else { 0 }));
     }
 
@@ -534,9 +528,6 @@ impl App {
 
     /// 跟随当前歌曲：自动切歌后把列表指针移到正在播放的那一行。
     fn reveal_current(&mut self) {
-        if !self.follow_current {
-            return;
-        }
         let Some(key) = self.current.as_ref().map(|song| song.key()) else {
             return;
         };
@@ -2115,6 +2106,8 @@ impl App {
                         current.album = update.album;
                     }
                     self.toast(message);
+                    // 标签写入正文后立刻重扫本地，补全结果即时显示。
+                    self.scan_local();
                 } else {
                     self.toast(message);
                 }
@@ -2377,12 +2370,12 @@ impl App {
             KeyCode::Char('k') | KeyCode::Up => self.move_selection(-1),
             KeyCode::Char('g') | KeyCode::Home => self.select_boundary(false),
             KeyCode::Char('G') | KeyCode::End => self.select_boundary(true),
-            KeyCode::PageUp | KeyCode::Char('[') => self.scroll_lyrics(-5),
-            KeyCode::PageDown | KeyCode::Char(']') => self.scroll_lyrics(5),
+            KeyCode::PageUp => self.scroll_lyrics(-5),
+            KeyCode::PageDown => self.scroll_lyrics(5),
             KeyCode::Enter => self.activate_selected(),
             KeyCode::Char(' ') => self.toggle_play(),
-            KeyCode::Char('n') => self.next_song(false),
-            KeyCode::Char('p') => self.previous_song(),
+            KeyCode::Char(']') => self.next_song(false),
+            KeyCode::Char('[') => self.previous_song(),
             KeyCode::Left => self.seek_by(-5000),
             KeyCode::Right => self.seek_by(5000),
             KeyCode::Char('+') | KeyCode::Char('=') => {
@@ -2397,24 +2390,26 @@ impl App {
             KeyCode::Char('d') => self.download_current(),
             KeyCode::Char('l') => {
                 self.show_lyrics = !self.show_lyrics;
+                // 关闭歌词时同步退出纯享模式，避免歌词区仍被纯享占据。
+                if !self.show_lyrics {
+                    self.lyrics_immersive = false;
+                }
+                self.toast(if self.show_lyrics {
+                    "歌词：开"
+                } else {
+                    "歌词：关"
+                });
             }
             KeyCode::Char('v') => {
                 self.lyrics_immersive = !self.lyrics_immersive;
+                // 进入纯享时强制打开歌词；退出纯享回到分栏形态。
+                if self.lyrics_immersive {
+                    self.show_lyrics = true;
+                }
                 self.toast(if self.lyrics_immersive {
                     "歌词纯享：开"
                 } else {
                     "歌词纯享：关"
-                });
-            }
-            KeyCode::Char('F') => {
-                self.follow_current = !self.follow_current;
-                if self.follow_current {
-                    self.reveal_current();
-                }
-                self.toast(if self.follow_current {
-                    "跟随当前：开"
-                } else {
-                    "跟随当前：关（手动移动列表后自动暂停）"
                 });
             }
             KeyCode::Char('R') => self.refresh_current(),

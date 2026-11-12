@@ -179,3 +179,95 @@ LRCLIB 中文覆盖抽样较差，会返回空）。全部失败追加写
   运行时另需 Node 18+ 的 `netease-cloud-music-api-alger`（MIT）与 `ffmpeg`（街声 HLS 转封装）。
 - 交互灵感来自 [go-musicfox](https://github.com/go-musicfox/go-musicfox) 与
   [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer)（鸣谢，未衍生代码）。
+
+## 完整默认路径与配置项
+
+XDG 默认路径：
+
+- 配置：`~/.config/musicyi/config.toml`
+- 数据：`~/.local/share/musicyi/`
+  - 历史：`history.jsonl`
+  - 会话：`session.json`
+  - 歌单目录：`playlists/`（保留给 M3U 文件，程序不会自动扫描）
+- 本地音乐默认目录：`~/Music/playlist/`
+- 本地转换默认目录：`~/Music/musicyi/local/`
+- 音频缓存：`~/.cache/musicyi/audio/`
+- 日志：`~/.local/state/musicyi/logs/`
+
+`config.toml` 全部常用项：
+
+```toml
+[api]
+base_url = "http://127.0.0.1:3000"
+timeout_secs = 15
+real_ip = ""                      # 需要时填，绕开部分网络风控；只随 song/url/v1 发送
+
+[player]
+quality = "exhigh"                # standard / higher / exhigh / lossless / hires
+volume = 0.8
+mode = "list_loop"                # list_loop / single / shuffle / sequential
+cache_limit_mb = 2048
+
+[ui]
+restore_session = true            # 退出保存队列 / 索引 / 进度
+mpris = true                      # MPRIS 桌面控制
+
+[download]
+dir = ""                          # 留空使用 ~/Music/musicyi
+
+[local]
+dir = ""                          # 留空使用 ~/Music/playlist
+output_dir = ""                   # 留空使用 ~/Music/musicyi/local
+tag_delay_ms = 220                # 批量转换间隔，避免风控
+```
+
+旧配置里的 `[source]` 表（`unblock` / `unblock_order` / `proxy` / `custom`）会被自动忽略，
+保存配置时消失。`MUSICYI_ROOT` 环境变量可把所有可写路径收拢到指定目录用于便携使用与测试。
+
+命令行参数：
+
+```bash
+musicyi [URL|ID|M3U|关键词]
+musicyi --api-base http://127.0.0.1:3000
+musicyi --quality lossless
+musicyi --clear-cache
+musicyi --paths                  # 打印配置 / 数据 / 缓存 / 日志路径
+```
+
+> 旧版 SQLite 已不再读写，可直接删除：`rm -f ~/.local/share/musicyi/musicyi.db*`。
+> 历史会从新的 JSONL 文件重新积累。
+
+## 本地转换与标签（详）
+
+- 转换依赖网易云搜索；找不到匹配即跳过，不会写入猜测结果。
+- 输出目录与源目录相同时拒绝转换，避免覆盖原文件。
+- 转换副本按原目录结构保存，扩展名不变，原文件不动；列表优先播放副本。
+- 找不到匹配 / 网络失败 / 目标目录不可写时会追加写 `<日志目录>/tag-failures.log`
+  （TSV：时间 / 文件路径 / query / 原因），默认日志目录见 `musicyi --paths`。
+- 转换副本含 title / artist / album、歌词（USLT）与封面（Front Cover），均经 lofty 写入。
+- 雀乐 / 街声的纯文本歌词按宽度换行；LRC 自动滚动，`PageUp` / `PageDown` 手动滚动。
+- `d` 下载：文件名 `{artist} - {title}.{ext}`，同名自动追加 ` (1)`、` (2)`，
+  不写标签也不嵌封面 / 歌词，一次只下载一首。
+
+## 音源策略
+
+1. **网易官方直链**：`/song/url/v1`，按当前音质请求；拿不到 URL 时自动逐档降到
+   `standard`，避免无损不可用导致整首失败。
+2. **官方试听**：只有官方返回 30 秒试听时才播放试听，不再尝试任何第三方音源。
+3. **无法播放**：自动跳到下一首；连续失败达到队列长度（最多 8 首）后停止。
+
+## 雀乐与街声
+
+- **雀乐**：本机 API 抓 `indie.cn` 首页最新 10 个 `vol`，汇总期数歌单与歌曲；
+  播放地址、封面、歌词都直接使用 `cdn2.indie.cn` 的链接；无时间轴纯文本歌词按纯文本显示。
+- **街声**：推荐前 30 首（每页 20 首，自动翻页去重），详情接口补时长 / 专辑 / 封面 / 歌词；
+  播放时本机 API 把 HLS 无损转封装为 MP3 缓存。
+
+## 常见问题（开发者向）
+
+**MPRIS 没有出现**：确认运行在图形会话且 `DBUS_SESSION_BUS_ADDRESS` 可用、
+`[ui].mpris = true`；重启后 `playerctl -l` 应列出 `musicyi`（D-Bus 名称
+`org.mpris.MediaPlayer2.musicyi`）。
+
+**foot 右侧比左侧留白远**：窗口宽度不是字符宽度整数倍时，foot 默认把多余像素放右侧。
+`~/.config/foot/foot.ini` 的 `[main]` 加 `pad=0x0 center` 让网格居中。

@@ -37,7 +37,7 @@ musicyi/
 │   ├── screenshot.png         # README 首页截图
 │   ├── screenshot-lyrics.png  # README 歌词纯享截图
 │   └── screenshot-indie.png   # README 雀乐推荐列表截图
-├── .github/workflows/ci.yml   # CI：fmt / check / test / clippy + windows cargo check
+├── .github/workflows/ci.yml   # CI：fmt / check / test / clippy
 ├── install.sh                 # 构建 release 并安装到 ~/.local/bin（--uninstall 只删二进制）
 ├── api-server/                # Node 网易云 API + 雀乐 / 街声目录（npm，node_modules 不入库）
 │   ├── index.js               # 手写启动器：实例化 netease-cloud-music-api，挂 /musicyi/health 与 musicyi 路由
@@ -95,14 +95,14 @@ GET  /musicyi/stream/streetvoice/:id                  播放：取 HLS 地址 �
 
 ## CI
 
-`.github/workflows/ci.yml`，push / PR 触发，两个 job：
+`.github/workflows/ci.yml`，push / PR 触发，单个 job：
 
 1. **fmt / check / test / clippy**（`ubuntu-latest`）：apt 装 `libasound2-dev pkg-config` →
    `cargo fmt --all --check` → `cargo check --workspace --all-targets` →
    `cargo test --workspace` → `cargo clippy --workspace --all-targets -- -D warnings`
-2. **windows cargo check**（`windows-latest`）：仅 `cargo check --workspace --all-targets`；
-   提前暴露 `cfg` 门控漏网之鱼（如某个 PR 忘了给 Unix-only API 加门控），
-   不跑测试以规避音频设备差异。
+
+Windows `cfg` 门控漏网之鱼不再有兜底 job（曾因 runner 分配失败长期无法运行，已移除）。
+修改 Unix-only 代码时注意手动跑 `cargo check --target x86_64-pc-windows-msvc`，或自行加门槛。
 
 已知仅警告、不影响结果：`actions/checkout@v4` 被强制跑在 Node 24；
 `ubuntu-latest` 于 2026-10 起迁移 Ubuntu 26。

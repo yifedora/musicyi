@@ -2548,8 +2548,8 @@ impl App {
         let player_h = 2;
         let fixed = search_h + player_h;
         let available = area.height.saturating_sub(fixed);
-        // 歌词纯享模式：歌词面板向上拓展到全部内容区；搜索时让位给搜索结果。
-        let immersive = self.lyrics_immersive && self.search.is_none();
+        // 歌词纯享模式：歌词面板向上拓展到全部内容区；所有视图（含搜索结果）一致生效。
+        let immersive = self.lyrics_immersive;
         let home = !immersive && self.view == View::Home && self.search.is_none();
         let (list_h, lyrics_h) = if immersive {
             (0, available)

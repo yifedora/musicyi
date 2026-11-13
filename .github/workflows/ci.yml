@@ -39,20 +39,3 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-
-  check-windows:
-    name: windows cargo check
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 安装 Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: 缓存 Cargo
-        uses: Swatinem/rust-cache@v2
-
-      # 预检 Windows 编译（mpris-server 在 Windows 下不参与编译）；
-      # 只跑 cargo check，不跑测试，避免音频设备相关的环境差异。
-      - name: 编译检查
-        run: cargo check --workspace --all-targets

@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/yifedora/musicyi)](https://github.com/yifedora/musicyi/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
 
-终端里的多来源音乐播放器。单一首页五个入口（网易原创 / 街声推荐 / 雀乐推荐 / 本地列表 / 最近播放），`Esc` 逐级返回并停在上次位置，听感参考 [go-musicfox](https://github.com/go-musicfox/go-musicfox)。
+终端里的多来源音乐播放器。单一首页五个入口（网易原创 / 街声推荐 / 雀乐推荐 / 本地列表 / 最近播放），`Esc` 逐级返回并停在上次位置，交互灵感来自 [go-musicfox](https://github.com/go-musicfox/go-musicfox)。
 
 ![musicyi 首页](docs/screenshot.png)
 

@@ -8,6 +8,16 @@ PORT="${PORT:-3000}"
 # 默认只监听本机；确需局域网访问时显式设置 HOST=0.0.0.0。
 HOST="${HOST:-127.0.0.1}"
 HEALTH_URL="http://127.0.0.1:${PORT}/search/hot/detail"
+# niri / 桌面会话的 PATH 不含 Homebrew 前缀，node 只装在
+# /home/linuxbrew/.linuxbrew/bin/node，这里兜底保证任何会话都能拉起。
+NODE_BIN="$(command -v node || true)"
+if [ -z "$NODE_BIN" ] && [ -x /home/linuxbrew/.linuxbrew/bin/node ]; then
+    NODE_BIN=/home/linuxbrew/.linuxbrew/bin/node
+fi
+if [ -z "$NODE_BIN" ]; then
+    echo "找不到 node（node 不在 PATH 里，且 /home/linuxbrew/.linuxbrew/bin/node 不存在）" >&2
+    exit 1
+fi
 
 port_pid() {
     ss -ltnp "sport = :${PORT}" 2>/dev/null |
@@ -29,7 +39,7 @@ if curl -fsS -m 2 "$HEALTH_URL" >/dev/null 2>&1; then
 fi
 
 cd "$DIR"
-nohup env PORT="$PORT" HOST="$HOST" node index.js >>server.log 2>&1 &
+nohup env PORT="$PORT" HOST="$HOST" "$NODE_BIN" index.js >>server.log 2>&1 &
 echo $! >server.pid
 
 for _ in $(seq 1 40); do

@@ -1488,6 +1488,34 @@ impl App {
 
     // ---------- 歌词 ----------
 
+    /// 按来源抓歌词，供下载写标签等后台任务用（不触碰界面状态）。
+    async fn lyric_for_source(
+        api: &ApiClient,
+        http: &reqwest::Client,
+        song: &Song,
+    ) -> Option<String> {
+        match song.source {
+            SourceKind::Local => musicyi_library::read_lyrics(Path::new(&song.id)),
+            SourceKind::Indie => {
+                let url = song.lyric_url.clone()?;
+                let resp = http.get(url).send().await.ok()?;
+                let text = resp.text().await.ok()?;
+                let trimmed = text.trim();
+                (!trimmed.is_empty()).then_some(text)
+            }
+            SourceKind::StreetVoice => {
+                let detail = api.streetvoice_detail(&song.id).await.ok()?;
+                let text = detail.lyrics.trim().to_string();
+                (!text.is_empty()).then_some(detail.lyrics)
+            }
+            _ => {
+                let raw = api.lyric(&song.id).await.ok()?;
+                let text = raw.lrc.trim().to_string();
+                (!text.is_empty()).then_some(raw.lrc)
+            }
+        }
+    }
+
     fn load_lyrics(&mut self, song: &Song) {
         let key = song.key();
         self.lyrics = Lyrics::default();
@@ -1854,8 +1882,12 @@ impl App {
         let resolver = self.resolver.clone();
         let tx = self.tx.clone();
         let http = self.http.clone();
+        let api = self.api.clone();
         let dir = self.cfg.download.resolved_dir();
         let quality = self.quality;
+        let log_dir = self.paths.log_dir.clone();
+        // 外部库回退客户端：可能因环境代理导致不可用，但只影响标签补缺，不阻断下载
+        let web = fallback::external_client().ok();
         tokio::spawn(async move {
             let source = match resolver.resolve(&song, quality).await {
                 Ok(source) => source,
@@ -1867,6 +1899,8 @@ impl App {
                     return;
                 }
             };
+            // 先用来源自带的正确标签（雀乐 / 街声 / 网易云元数据），
+            // 歌词和封面则在源库里查不到时回退外部库，与标签补全同一套流程。
             let artist = musicyi_library::sanitize(&song.artist_text());
             let title = musicyi_library::sanitize(&song.name);
             let ext: String = source
@@ -1897,10 +1931,16 @@ impl App {
                 .await;
             match result {
                 Ok(outcome) => {
+                    let path = outcome.path.clone();
+                    let bytes = outcome.bytes;
+                    let tagged =
+                        Self::tag_downloaded(&api, &http, web.as_ref(), &song, &path, &log_dir)
+                            .await;
                     let _ = tx.send(Event::DownloadDone {
                         seq,
-                        path: outcome.path,
-                        bytes: outcome.bytes,
+                        path,
+                        bytes,
+                        tagged,
                     });
                 }
                 Err(e) => {
@@ -1911,6 +1951,99 @@ impl App {
                 }
             }
         });
+    }
+
+    /// 下载完成后把标题 / 歌手 / 专辑 / 歌词 / 封面写进文件。
+    /// 优先用来源自带的数据，缺失的歌词或封面再按需用外部库补，
+    /// 全部失败不打乱下载流程，只返回一句说明让调用方 toast。
+    async fn tag_downloaded(
+        api: &ApiClient,
+        http: &reqwest::Client,
+        web: Option<&reqwest::Client>,
+        song: &Song,
+        path: &Path,
+        log_dir: &Path,
+    ) -> String {
+        let title = song.name.trim().to_string();
+        let artists: Vec<String> = song
+            .artists
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let album = song.album.trim().to_string();
+        let origin = path.to_path_buf();
+
+        // 歌词：先源库，再 LRCLIB（若外部库可用）
+        let artist_name = song.artist_text();
+        let mut lyric = Self::lyric_for_source(api, http, song).await;
+        if lyric.is_none()
+            && let Some(web) = web
+            && !title.is_empty()
+        {
+            lyric = fallback::lrclib_lyrics(web, &title, &artist_name, song.duration_ms).await;
+        }
+
+        // 封面：先来源自带的 URL（带 Referer），再 MusicBrainz + Cover Art Archive（若外部库可用）
+        let mut cover = match song.cover_url.as_deref().filter(|u| !u.trim().is_empty()) {
+            Some(url) => match http
+                .get(url)
+                .header("Referer", "https://music.163.com/")
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => resp
+                    .bytes()
+                    .await
+                    .ok()
+                    .map(|b| b.to_vec())
+                    .filter(|b| !b.is_empty()),
+                _ => None,
+            },
+            None => None,
+        };
+        if cover.is_none()
+            && let Some(web) = web
+            && !title.is_empty()
+        {
+            cover = fallback::musicbrainz_meta(web, &title, &artist_name, song.duration_ms)
+                .await
+                .and_then(|meta| meta.cover);
+        }
+
+        let title_opt = (!title.is_empty()).then_some(title.as_str());
+        let album_opt = (!album.is_empty()).then_some(album.as_str());
+        match musicyi_library::write_meta_full(
+            path,
+            title_opt,
+            &artists,
+            album_opt,
+            lyric.as_deref(),
+            cover.as_deref(),
+        ) {
+            Ok(()) => {
+                let mut parts = Vec::new();
+                if title_opt.is_some() || !artists.is_empty() {
+                    parts.push("标题/歌手/专辑");
+                }
+                if lyric.is_some() {
+                    parts.push("歌词");
+                }
+                if cover.is_some() {
+                    parts.push("封面");
+                }
+                if parts.is_empty() {
+                    "标签已写入".to_string()
+                } else {
+                    format!("标签已写入（{}）", parts.join("、"))
+                }
+            }
+            Err(e) => {
+                let reason = e.to_string();
+                fallback::log_failure(log_dir, &origin, &title, &reason);
+                format!("标签写入失败：{reason}")
+            }
+        }
     }
 
     // ---------- 事件 ----------
@@ -2238,16 +2371,22 @@ impl App {
                 }
                 self.download_progress = Some((done, total));
             }
-            Event::DownloadDone { seq, path, bytes } => {
+            Event::DownloadDone {
+                seq,
+                path,
+                bytes,
+                tagged,
+            } => {
                 if seq != self.download_seq {
                     return;
                 }
                 self.downloading = None;
                 self.download_progress = None;
                 self.toast(format!(
-                    "下载完成（{}）：{}",
+                    "下载完成（{}）· {}：{}",
                     human_bytes(bytes),
-                    path.display()
+                    tagged,
+                    path.display(),
                 ));
             }
             Event::DownloadFailed { seq, message } => {

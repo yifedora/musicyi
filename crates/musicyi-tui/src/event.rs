@@ -146,6 +146,7 @@ pub enum Event {
         seq: u64,
         path: PathBuf,
         bytes: u64,
+        tagged: String,
     },
     DownloadFailed {
         seq: u64,

@@ -1817,7 +1817,7 @@ dependencies = [
 
 [[package]]
 name = "musicyi"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -1831,7 +1831,7 @@ dependencies = [
 
 [[package]]
 name = "musicyi-api"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "musicyi-core",
  "reqwest",
@@ -1843,7 +1843,7 @@ dependencies = [
 
 [[package]]
 name = "musicyi-core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "chrono",
  "dirs",
@@ -1857,7 +1857,7 @@ dependencies = [
 
 [[package]]
 name = "musicyi-library"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "lofty",
  "musicyi-core",
@@ -1868,7 +1868,7 @@ dependencies = [
 
 [[package]]
 name = "musicyi-player"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "musicyi-core",
  "reqwest",
@@ -1879,7 +1879,7 @@ dependencies = [
 
 [[package]]
 name = "musicyi-tui"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "chrono",
  "ferrous-opencc",

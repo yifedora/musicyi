@@ -1860,8 +1860,34 @@ impl App {
 
     // ---------- 下载 ----------
 
-    fn download_current(&mut self) {
-        let Some(song) = self.current.clone() else {
+    /// 返回当前列表光标指向的歌曲；首页、歌单列表等没有歌曲行的视图返回 None。
+    fn selected_song(&self) -> Option<Song> {
+        let index = self.selected_index()?;
+        if let Some(search) = &self.search {
+            return search.songs.get(index).cloned();
+        }
+        match self.view {
+            View::Home => None,
+            View::Netease => match self.netease_page {
+                NeteasePage::Browse => self.netease_chart.get(index).cloned(),
+                // 热门歌单列表，没有歌曲
+                NeteasePage::Search => None,
+                NeteasePage::Tracks => self.netease_tracks.as_ref()?.songs.get(index).cloned(),
+            },
+            View::Indie => match self.indie_page {
+                // 专辑列表，没有歌曲
+                IndiePage::Playlists => None,
+                IndiePage::Tracks => self.indie_tracks.as_ref()?.songs.get(index).cloned(),
+            },
+            View::StreetVoiceRecommend => self.sv_recommend.get(index).cloned(),
+            View::Local => self.local_songs.get(index).cloned(),
+            View::Recent => self.history.get(index).cloned(),
+        }
+    }
+
+    fn download_selected(&mut self) {
+        // 优先使用光标选中的歌曲；选中行不是歌曲（首页 / 歌单列表）时回退到正在播放的歌。
+        let Some(song) = self.selected_song().or_else(|| self.current.clone()) else {
             self.toast("当前没有歌曲");
             return;
         };
@@ -2544,7 +2570,7 @@ impl App {
                 self.set_volume(volume);
             }
             KeyCode::Char('r') => self.cycle_mode(),
-            KeyCode::Char('d') => self.download_current(),
+            KeyCode::Char('d') => self.download_selected(),
             KeyCode::Char('l') => {
                 self.show_lyrics = !self.show_lyrics;
                 // 关闭歌词时同步退出纯享模式，避免歌词区仍被纯享占据。

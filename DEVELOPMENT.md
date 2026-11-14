@@ -246,7 +246,8 @@ musicyi --paths                  # 打印配置 / 数据 / 缓存 / 日志路径
   （TSV：时间 / 文件路径 / query / 原因），默认日志目录见 `musicyi --paths`。
 - 转换副本含 title / artist / album、歌词（USLT）与封面（Front Cover），均经 lofty 写入。
 - 雀乐 / 街声的纯文本歌词按宽度换行；LRC 自动滚动，`PageUp` / `PageDown` 手动滚动。
-- `d` 下载：文件名 `{artist} - {title}.{ext}`，同名自动追加 ` (1)`、` (2)`，一次只下载一首。
+- `d` 下载光标选中的歌曲（首页 / 歌单列表等没有歌曲行的视图回退到正在播放的歌曲）：
+  文件名 `{artist} - {title}.{ext}`，同名自动追加 ` (1)`、` (2)`，一次只下载一首。
   下载完成后按与「本地标签补全」相同的思路写标签：标题 / 歌手 / 专辑直接取来源元数据，
   歌词优先取来源自带（网易云 `/lyric/new`、雀乐 `lyric_url`、街声详情），封面优先取来源
   自带 URL（带 Referer）；缺失的歌词走 LRCLIB、缺失的封面走 MusicBrainz + Cover Art Archive。
